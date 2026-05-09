@@ -1,4 +1,4 @@
-cat /workspace/tripy.ai/app.py
+
         day_offset = int(day.get("day", 1)) - 1
         base_date = start_date + timedelta(days=day_offset)
         times = {"morning": 9, "afternoon": 13, "evening": 19}
@@ -296,3 +296,4 @@ def generate_itinerary(
         parsed = parsed if isinstance(parsed, dict) else {}
 
     return ItineraryResult(parsed, text, parse_error, warnings)
+cat /workspace/tripy.ai/app.py
