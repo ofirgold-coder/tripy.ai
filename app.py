@@ -419,7 +419,7 @@ def _get_config() -> Dict[str, Any]:
     effective_timeout_sec = max(configured_timeout_sec, float(MIN_TIMEOUT))
     timeout_ms = int(effective_timeout_sec * 1000)
     temperature = _safe_float(secrets.get("GEMINI_TEMPERATURE", 0.5), 0.5)
-    max_output_tokens = _safe_int(secrets.get("GEMINI_MAX_OUTPUT_TOKENS", 12000), 12000)
+    max_output_tokens = _safe_int(secrets.get("GEMINI_MAX_OUTPUT_TOKENS", 13500), 13500)
 
     return {
         "api_key": api_key,
