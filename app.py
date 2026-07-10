@@ -1,3 +1,4 @@
+
 """TripPilot (single-file deploy)
 
 This file is a fully self-contained version of the original project (app.py + services/* + utils/*)
@@ -26,6 +27,7 @@ from datetime import datetime, timedelta
 from json import JSONDecodeError
 from pathlib import Path
 from typing import Any, Dict, List, NamedTuple, Optional, Tuple
+from urllib.parse import quote, urlencode
 
 import httpx
 import streamlit as st
@@ -1323,5 +1325,229 @@ def main() -> None:
             st.code(snippet)
 
 
+TRAVELER_OPTIONS_V2 = {"מטייל/ת יחיד/ה": "solo", "זוג": "couple", "חברים": "friends", "משפחה": "family"}
+BUDGET_OPTIONS_V2 = {"חסכוני": "low", "מאוזן": "medium", "מפנק": "high"}
+PACE_OPTIONS_V2 = {"רגוע": "relaxed", "מאוזן": "balanced", "מלא חוויות": "packed"}
+LODGING_OPTIONS_V2 = {"מלון": "hotel", "דירה": "apartment", "הוסטל": "hostel", "פתוח/ה להצעות": "flexible"}
+INTEREST_OPTIONS_V2 = {
+    "טבע ונופים": "nature", "חופים": "beaches", "אוכל וקולינריה": "food",
+    "תרבות והיסטוריה": "culture", "חיי לילה": "nightlife", "קניות": "shopping",
+    "אקסטרים וספורט": "sports", "מוזיאונים": "museums", "טיול עם ילדים": "family activities",
+}
+
+
+def inject_travel_theme() -> None:
+    """Apply a polished visual layer without changing the existing planning engine."""
+    st.markdown(
+        """
+        <style>
+        :root { --ink:#102a43; --muted:#627d98; --mint:#48c9b0; }
+        .stApp { background:linear-gradient(180deg,#f4f8fb 0%,#fbfcfd 42%,#eaf4f2 100%); color:var(--ink); }
+        [data-testid="stHeader"] { background:rgba(255,255,255,0); }
+        [data-testid="stSidebar"] { background:linear-gradient(180deg,#09203f,#1d5b79); }
+        [data-testid="stSidebar"] * { color:#f7fbff; }
+        .block-container { max-width:1180px; padding-top:1.5rem; padding-bottom:4rem; }
+        h1,h2,h3 { color:#102a43; letter-spacing:-.02em; }
+        .hero { border-radius:26px; padding:3.4rem 3rem; min-height:285px; color:white;
+          background:linear-gradient(90deg,rgba(5,21,42,.92),rgba(5,21,42,.57),rgba(5,21,42,.18)),url('https://images.unsplash.com/photo-1519608487953-e999c86e745?auto=format&fit=crop&w=1800&q=85') center/cover;
+          box-shadow:0 20px 50px rgba(12,40,64,.24); margin-bottom:1.25rem; }
+        .hero h1,.hero p { color:white !important; max-width:690px; }
+        .hero h1 { font-size:clamp(2.1rem,4vw,3.55rem); margin:0 0 .65rem; }
+        .hero p { font-size:1.12rem; margin:0; line-height:1.6; }
+        .eyebrow { color:#97f0de !important; font-weight:700; letter-spacing:.11em; font-size:.76rem; }
+        .section-intro { color:var(--muted); margin-top:-.3rem; margin-bottom:1.1rem; }
+        .story-card { min-height:180px; padding:1.35rem; border-radius:18px; color:white; display:flex; flex-direction:column; justify-content:flex-end; box-shadow:0 12px 25px rgba(23,43,77,.16); background-size:cover; background-position:center; }
+        .story-card h3,.story-card p { color:white !important; margin:0; }.story-card p { margin-top:.35rem; opacity:.92; }
+        .nature { background-image:linear-gradient(0deg,rgba(8,35,40,.84),rgba(8,35,40,.10)),url('https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=900&q=80'); }
+        .beach { background-image:linear-gradient(0deg,rgba(8,35,40,.82),rgba(8,35,40,.10)),url('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=900&q=80'); }
+        .city { background-image:linear-gradient(0deg,rgba(8,20,43,.86),rgba(8,20,43,.08)),url('https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=900&q=80'); }
+        .soft-card { background:rgba(255,255,255,.9); border:1px solid rgba(129,168,193,.24); border-radius:18px; padding:1.1rem 1.2rem; box-shadow:0 8px 24px rgba(23,43,77,.07); }
+        .soft-card strong { color:#102a43; }.stButton>button,.stFormSubmitButton>button { border:0; border-radius:11px; background:#087e8b; color:white; font-weight:700; padding:.58rem 1rem; }
+        .stButton>button:hover,.stFormSubmitButton>button:hover { background:#066875; color:white; }
+        [data-testid="stLinkButton"] a { border-radius:11px; background:#087e8b; color:white; border:0; font-weight:700; }
+        [data-testid="stMetric"] { background:rgba(255,255,255,.82); padding:.7rem .85rem; border-radius:13px; border:1px solid rgba(129,168,193,.22); }
+        [data-testid="stTabs"] button { font-weight:700; color:#486581; } [data-testid="stTabs"] button[aria-selected="true"] { color:#087e8b; }
+        .provider-note { background:#e7f5f2; border-right:4px solid #48c9b0; padding:.8rem 1rem; border-radius:10px; color:#174e5b; }
+        @media (max-width:700px) { .hero { padding:2.2rem 1.5rem; }.block-container { padding-left:1rem; padding-right:1rem; } }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_hero() -> None:
+    st.markdown("""
+    <section class="hero" dir="rtl"><div class="eyebrow">TRIPPILOT · PLAN WITH CONFIDENCE</div>
+    <h1>הטיול הבא שלך, בדיוק כמו שדמיינת</h1>
+    <p>ממחשבה ראשונה עד להזמנה: בונים מסלול אישי, משווים אפשרויות ומרכזים את כל פרטי הטיול במקום אחד.</p></section>""", unsafe_allow_html=True)
+    cards = [("nature", "טבע בלי להתפשר", "מסלולים, אגמים ונקודות תצפית שמתאימים לקצב שלך"), ("beach", "חופשה בקצב שלך", "חופים, אוכל טוב וזמן אמיתי להירגע"), ("city", "ערים שלא ישנים בהן", "תרבות, מלונות וחיי לילה בתכנון אחד")]
+    for col, (class_name, title, copy) in zip(st.columns(3), cards):
+        col.markdown(f'<div class="story-card {class_name}" dir="rtl"><h3>{title}</h3><p>{copy}</p></div>', unsafe_allow_html=True)
+
+
+def _dates_from_profile(profile: Dict[str, Any]) -> Tuple[str, str]:
+    date_text = str(profile.get("dates", ""))
+    return tuple(date_text.split(" עד ", 1)) if " עד " in date_text else ("", "")
+
+
+def _provider_links(profile: Dict[str, Any]) -> Dict[str, str]:
+    destination = str(profile.get("destination") or "").strip() or "travel"
+    origin = str(profile.get("origin") or "Israel").strip()
+    checkin, checkout = _dates_from_profile(profile)
+    booking_query = urlencode({"ss": destination, "checkin": checkin, "checkout": checkout})
+    airbnb_query = urlencode({"checkin": checkin, "checkout": checkout})
+    return {
+        "טיסות": f"https://www.google.com/travel/flights?q={quote(f'Flights from {origin} to {destination}')}",
+        "Booking.com": f"https://www.booking.com/searchresults.html?{booking_query}",
+        "Airbnb": f"https://www.airbnb.com/s/{quote(destination)}/homes?{airbnb_query}",
+        "רכב שכור": f"https://www.rentalcars.com/SearchResults.do?{urlencode({'location': destination})}",
+    }
+
+
+def intake_form_v2() -> None:
+    st.markdown("<div dir='rtl'><h2>נתחיל מהחלום שלך</h2><p class='section-intro'>כמה פרטים קצרים, ואבנה לך מסלול שמותאם באמת לאנשים שנוסעים.</p></div>", unsafe_allow_html=True)
+    default_start = datetime.now().date() + timedelta(days=30)
+    default_end = default_start + timedelta(days=6)
+    with st.form("trip_form_v2", border=False):
+        first, second, third = st.columns(3)
+        destination = first.text_input("לאן נוסעים?", placeholder="למשל: רומא, יוון או תאילנד")
+        origin = second.text_input("מאיפה יוצאים?", value="תל אביב")
+        travelers_count = third.number_input("כמה נוסעים?", min_value=1, max_value=20, value=2)
+        travel_dates = st.date_input("תאריכי הנסיעה", value=(default_start, default_end), min_value=datetime.now().date())
+        first, second, third = st.columns(3)
+        traveler_label = first.selectbox("הרכב המטיילים", list(TRAVELER_OPTIONS_V2))
+        budget_label = second.selectbox("סגנון תקציב", list(BUDGET_OPTIONS_V2), index=1)
+        pace_label = third.selectbox("קצב הטיול", list(PACE_OPTIONS_V2), index=1)
+        interests = st.multiselect("מה חשוב לכם בטיול?", list(INTEREST_OPTIONS_V2), default=["אוכל וקולינריה", "טבע ונופים", "תרבות והיסטוריה"])
+        first, second = st.columns(2)
+        lodging_label = first.selectbox("איפה תרצו לישון?", list(LODGING_OPTIONS_V2))
+        mobility_label = second.selectbox("התניידות מועדפת", ["עם רכב", "בלי רכב", "פתוח/ה להצעות"])
+        constraints = st.text_input("דברים שחשוב לדעת", placeholder="למשל: כשרות, אלרגיות, נגישות, תקציב יומי או טיול עם ילדים")
+        submitted = st.form_submit_button("שומרים ומתחילים לתכנן", use_container_width=True)
+        if submitted:
+            start_date, end_date = travel_dates if isinstance(travel_dates, (tuple, list)) and len(travel_dates) == 2 else (travel_dates, travel_dates)
+            profile = {
+                "destination": destination.strip(), "origin": origin.strip(), "days": max((end_date - start_date).days + 1, 1), "traveler_type": TRAVELER_OPTIONS_V2[traveler_label], "travelers_count": int(travelers_count),
+                "budget": BUDGET_OPTIONS_V2[budget_label], "pace": PACE_OPTIONS_V2[pace_label], "mobility": {"עם רכב": "with car", "בלי רכב": "no car", "פתוח/ה להצעות": "flexible"}[mobility_label],
+                "interests": [INTEREST_OPTIONS_V2[item] for item in interests], "constraints": constraints.strip(), "lodging": LODGING_OPTIONS_V2[lodging_label], "dates": f"{start_date.isoformat()} עד {end_date.isoformat()}", "open_to_alternatives": True,
+            }
+            valid, _ = validate_profile(profile)
+            if not valid:
+                st.error("כדי להתחיל צריך לבחור יעד ולהשלים את פרטי הטיול.")
+                return
+            st.session_state["trip_profile"] = profile
+            st.session_state["chosen_destination"] = destination.strip()
+            st.success("פרטי הטיול נשמרו. אפשר ליצור מסלול או להתחיל בחיפוש הזמנות.")
+
+
+def render_trip_snapshot(profile: Dict[str, Any]) -> None:
+    st.markdown("<div class='soft-card' dir='rtl'><strong>הטיול שלך מוכן לתכנון</strong></div>", unsafe_allow_html=True)
+    metrics = st.columns(4)
+    metrics[0].metric("יעד", profile.get("destination", "היעד שלך"))
+    metrics[1].metric("משך", f"{profile.get('days', 0)} ימים")
+    metrics[2].metric("מטיילים", profile.get("travelers_count", 1))
+    metrics[3].metric("לינה", {"hotel": "מלון", "apartment": "דירה", "hostel": "הוסטל", "flexible": "גמיש"}.get(profile.get("lodging"), "גמיש"))
+
+
+def render_booking_hub(profile: Optional[Dict[str, Any]]) -> None:
+    profile = profile or {}
+    st.markdown("<div dir='rtl'><h2>מרכז ההזמנות</h2><p class='section-intro'>פותחים חיפוש מוכן עם היעד והתאריכים שבחרת. המחיר, הזמינות והתשלום מתבצעים אצל הספק שבחרת.</p></div>", unsafe_allow_html=True)
+    links = _provider_links(profile)
+    providers = [("טיסות", "חיפוש טיסות והשוואת זמנים"), ("Booking.com", "מלונות ודירות נופש"), ("Airbnb", "בתים וחדרים מקומיים"), ("רכב שכור", "ניידות עצמאית ביעד")]
+    for col, (name, description) in zip(st.columns(4), providers):
+        with col:
+            st.markdown(f"<div class='soft-card' dir='rtl'><strong>{name}</strong><br><small>{description}</small></div>", unsafe_allow_html=True)
+            st.link_button(f"לחיפוש ב-{name}", links[name], use_container_width=True)
+    st.markdown("<div class='provider-note' dir='rtl'><strong>שקיפות מלאה:</strong> זהו מרכז חיפוש שמפנה לאתרים הרשמיים. כדי להציג מחירים בזמן אמת, לבצע סליקה באתר ולסנכרן הזמנות אוטומטית, נדרש חיבור API מורשה והסכם שותפים מול כל ספק.</div>", unsafe_allow_html=True)
+
+
+def render_trip_tools(profile: Optional[Dict[str, Any]]) -> None:
+    profile = profile or {}
+    st.markdown("<div dir='rtl'><h2>כלי טיול חכמים</h2><p class='section-intro'>עוד שכבה של סדר ושקט לפני שיוצאים לדרך.</p></div>", unsafe_allow_html=True)
+    budget_tab, pack_tab, checklist_tab = st.tabs(["תקציב", "רשימת ציוד", "לפני שיוצאים"])
+    with budget_tab:
+        left, right = st.columns([1, 1.25])
+        with left:
+            nightly = st.number_input("לינה ללילה (₪)", min_value=0, value=520, step=50, key="nightly_budget")
+            daily = st.number_input("אוכל ופעילויות ליום (₪)", min_value=0, value=360, step=50, key="daily_budget")
+            flights = st.number_input("טיסות / נסיעות (₪)", min_value=0, value=1200, step=100, key="transport_budget")
+        with right:
+            days, travelers = int(profile.get("days") or 1), int(profile.get("travelers_count") or 1)
+            estimate = (nightly + daily) * days * travelers + flights * travelers
+            st.markdown("<div class='soft-card' dir='rtl'><strong>אומדן טיול אישי</strong><br><br>" + f"ל-{travelers} נוסעים ול-{days} ימים<br><span style='font-size:2rem;font-weight:800;color:#087e8b'>₪{estimate:,.0f}</span><br><small>אומדן לתכנון בלבד; המחיר הסופי תלוי בספק ובזמינות.</small></div>", unsafe_allow_html=True)
+    with pack_tab:
+        packing = ["דרכון / תעודה מזהה", "ביטוח נסיעות", "כרטיסי אשראי ומעט מזומן", "מטען ומתאם חשמל", "תרופות אישיות", "עותקי הזמנות בטלפון"]
+        if "beaches" in profile.get("interests", []): packing.extend(["בגד ים", "קרם הגנה"])
+        if "nature" in profile.get("interests", []): packing.extend(["נעלי הליכה", "בקבוק מים רב-פעמי"])
+        st.caption("סמנו מה שכבר מוכן — המצב נשמר לאורך העבודה הנוכחית.")
+        for item in packing: st.checkbox(item, key=f"packing_{item}")
+    with checklist_tab:
+        for item in ["בדקו תוקף דרכון ודרישות כניסה", "רכשו ביטוח שמתאים לאופי הטיול", "הפעילו חבילת גלישה או eSIM", "שמרו אישורי הזמנה גם במצב לא מקוון", "עדכנו אדם קרוב בתכנית ובפרטי הלינה"]:
+            st.checkbox(item, key=f"check_{item}")
+
+
+def render_itinerary_v2(itinerary: Dict[str, Any]) -> None:
+    summary = itinerary.get("trip_summary") if isinstance(itinerary.get("trip_summary"), dict) else {}
+    st.markdown("<div dir='rtl'><h2>המסלול האישי שלך</h2></div>", unsafe_allow_html=True)
+    headline = summary.get("destination", st.session_state.get("chosen_destination", "הטיול שלך"))
+    st.markdown(f"<div class='soft-card' dir='rtl'><strong>{headline}</strong><br><small>{summary.get('pace', '')}</small></div>", unsafe_allow_html=True)
+    focuses = summary.get("high_level_focus") if isinstance(summary.get("high_level_focus"), list) else []
+    if focuses: st.markdown("**מה מחכה לכם:** " + " · ".join(str(item) for item in focuses))
+    lodging = itinerary.get("lodging") if isinstance(itinerary.get("lodging"), list) else []
+    if lodging:
+        st.subheader("אפשרויות לינה שכדאי לבדוק")
+        for option in lodging[:4]:
+            if isinstance(option, dict):
+                with st.expander(f"{option.get('name', 'אפשרות לינה')} · {option.get('area', '')}"):
+                    st.write(option.get("why", "")); st.caption(option.get("price_note", "")); render_sources(option.get("sources"))
+    for day in itinerary.get("days", []) if isinstance(itinerary.get("days"), list) else []:
+        if not isinstance(day, dict): continue
+        title = day.get("title") or day.get("theme") or "יום טיול"
+        with st.expander(f"יום {day.get('day', '')} · {title}", expanded=day.get("day") == 1):
+            blocks = day.get("blocks") if isinstance(day.get("blocks"), list) else []
+            if blocks:
+                for block in blocks:
+                    if isinstance(block, dict):
+                        st.markdown(f"**{block.get('time', '').title()}** · {block.get('activity', '')}")
+                        st.caption(f"{block.get('area', '')} · {block.get('duration_est', '')} · {block.get('transit_note', '')}")
+            else:
+                for slot in ("morning", "afternoon", "evening"):
+                    for item in day.get(slot, []) if isinstance(day.get(slot), list) else []:
+                        if isinstance(item, dict):
+                            st.markdown(f"**{slot}** · {item.get('activity', '')}")
+                            st.caption(f"{item.get('area', '')} · {item.get('duration_est', '')} {item.get('notes', '')}")
+            if day.get("plan_b"):
+                st.info("תכנית חלופית: " + "; ".join(str(option.get("alternative", option)) if isinstance(option, dict) else str(option) for option in day["plan_b"]))
+    render_export()
+
+
+def sidebar_v2() -> None:
+    with st.sidebar:
+        st.markdown("## ✦ TripPilot"); st.caption("תכנון טיולים אישי, נעים ופשוט")
+        profile = st.session_state.get("trip_profile")
+        if profile:
+            st.markdown("---"); st.markdown(f"**{profile.get('destination')}**"); st.caption(f"{profile.get('days')} ימים · {profile.get('travelers_count', 1)} נוסעים")
+        st.markdown("---"); st.caption("המסלול נוצר בעזרת Gemini; הזמנות ותשלומים מתבצעים באתרי הספקים.")
+        if st.button("+ טיול חדש", use_container_width=True): _reset_session_state(); st.rerun()
+
+
+def travel_main() -> None:
+    _init_state(); inject_travel_theme(); sidebar_v2(); render_hero()
+    planning_tab, booking_tab, tools_tab = st.tabs(["מתכננים", "מזמינים", "כלי טיול"])
+    with planning_tab:
+        intake_form_v2()
+        profile = st.session_state.get("trip_profile")
+        if profile:
+            st.markdown("---"); render_trip_snapshot(profile)
+            st.markdown("<div dir='rtl'><h3>מוכנים לבנות מסלול?</h3><p class='section-intro'>נשתמש בהעדפות, בתאריכים ובקצב שבחרת כדי ליצור תכנית יומית גמישה.</p></div>", unsafe_allow_html=True)
+            refinement, alternative = render_refinement(), render_alternatives()
+            if st.button("יצירת מסלול אישי", type="primary", use_container_width=True): _handle_generate(refinement=refinement, force_destination=alternative)
+            if st.session_state.get("generation_error"): st.error(st.session_state["generation_error"])
+            itinerary = _get_valid_itinerary_from_state()
+            if itinerary: render_itinerary_v2(itinerary)
+    with booking_tab: render_booking_hub(st.session_state.get("trip_profile"))
+    with tools_tab: render_trip_tools(st.session_state.get("trip_profile"))
+
+
 if __name__ == "__main__":
-    main()
+    travel_main()
